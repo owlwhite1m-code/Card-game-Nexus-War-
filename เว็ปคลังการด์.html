@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TCG Studio: Deck Builder & Card Inspector</title>
+  <style>
+    :root {
+      --bg-main: #0f1015;
+      --bg-card: #181920;
+      --bg-item: #24283b;
+      --accent: #7aa2f7;
+      --accent-hover: #bb9af7;
+      --danger: #f7768e;
+      --text: #c0caf5;
+      --life-accent: #ff9e64;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body { background-color: var(--bg-main); color: var(--text); padding: 20px; }
+
+    .header {
+      max-width: 1200px; margin: 0 auto 20px auto;
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 15px; border-bottom: 2px solid #292e42;
+    }
+    .header h1 { font-size: 22px; color: #fff; }
+    .header-stats { display: flex; gap: 15px; font-size: 14px; }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px; max-width: 1200px; margin: 0 auto;
+    }
+
+    .panel {
+      background-color: var(--bg-card);
+      border: 1px solid #292e42; border-radius: 10px; padding: 15px;
+    }
+    .panel h2 { font-size: 15px; color: var(--accent); margin-bottom: 12px; }
+
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 11px; margin-bottom: 4px; color: #9aa5ce; }
+    .form-group input, .form-group textarea {
+      width: 100%; padding: 8px; background: #1a1b26; border: 1px solid #414868;
+      border-radius: 5px; color: #fff; font-size: 12px;
+    }
+
+    /* คลังการ์ดแบบ Grid */
+    .card-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px; max-height: 750px; overflow-y: auto; padding-right: 5px;
+    }
+
+    /* ใบการ์ดบนกระดาน */
+    .card-item {
+      background-color: var(--bg-item); border: 2px solid #414868;
+      border-radius: 6px; padding: 6px; cursor: pointer; position: relative;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .card-item:hover { transform: translateY(-4px); border-color: var(--accent); }
+    .card-type-tag { font-size: 9px; background: #414868; padding: 1px 4px; border-radius: 3px; position: absolute; top: 4px; right: 4px; }
+    .card-title { font-size: 11px; font-weight: bold; margin-bottom: 4px; width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-img { width: 100%; height: 95px; object-fit: cover; border-radius: 4px; background: #000; }
+    .card-stats { display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px; color: #7dcfff; }
+
+    .card-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+    .btn-sm { flex: 1; padding: 3px; font-size: 9px; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; }
+    .btn-add { background: var(--accent); color: #10121b; }
+    .btn-add-life { background: var(--life-accent); color: #10121b; }
+    .btn-inspect { background: #414868; color: #fff; }
+
+    /* รายการเด็ค */
+    .deck-section { margin-bottom: 15px; background: #13141c; padding: 10px; border-radius: 8px; border: 1px solid #292e42; }
+    .deck-section h3 { font-size: 13px; color: #a9b1d6; margin-bottom: 8px; display: flex; justify-content: space-between; }
+    
+    .deck-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-item); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 12px;
+    }
+    .btn {
+      width: 100%; padding: 8px; background: var(--accent); color: #15161e;
+      border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 5px;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-save { background: #9ece6a; }
+    .btn-export { background: #7dcfff; color: #10121b; }
+    .btn-import { background: #bb9af7; color: #10121b; }
+    .btn-danger { background: var(--danger); color: #fff; width: auto; padding: 2px 6px; font-size: 10px; }
+
+    .saved-decks-list { margin-top: 15px; border-top: 1px dashed #414868; padding-top: 10px; }
+    .saved-deck-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #1a1b26; padding: 6px 10px; border-radius: 4px; margin-bottom: 5px; font-size: 12px;
+    }
+
+    /* Impact / Analytics Section */
+    .impact-panel {
+      margin-top: 15px; background: #13141c; padding: 12px; border-radius: 8px; border: 1px solid #2ac3de;
+    }
+    .impact-panel h3 { font-size: 13px; color: #2ac3de; margin-bottom: 8px; }
+    .cost-curve-container { display: flex; align-items: flex-end; gap: 4px; height: 60px; padding: 5px 0; border-bottom: 1px solid #292e42; }
+    .bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+    .bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.3s; }
+    .bar-label { font-size: 9px; color: #9aa5ce; margin-top: 2px; }
+    .impact-stat { font-size: 11px; margin-top: 6px; display: flex; justify-content: space-between; color: #c0caf5; }
+    .warning-box { font-size: 10px; color: #e0af68; margin-top: 8px; background: #242014; padding: 6px; border-radius: 4px; border-left: 3px solid #e0af68; }
+
+    /* Modal Pop-up */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85); display: none;
+      justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-content {
+      background: #181920; border: 2px solid var(--accent);
+      border-radius: 12px; padding: 20px; display: flex; gap: 20px;
+      max-width: 580px; width: 90%; position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 10px; right: 15px; font-size: 20px;
+      color: #fff; cursor: pointer; font-weight: bold;
+    }
+    .modal-preview-img { width: 200px; height: 280px; object-fit: cover; border-radius: 8px; border: 1px solid #414868; }
+    .modal-details { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .modal-details h3 { font-size: 20px; color: #fff; border-bottom: 1px solid #414868; padding-bottom: 5px; }
+    .detail-badge { display: inline-block; padding: 3px 8px; background: #414868; border-radius: 4px; font-size: 11px; margin-right: 5px; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; background: #1a1b26; padding: 10px; border-radius: 6px; }
+    .detail-item { font-size: 12px; color: #9aa5ce; }
+    .detail-item span { color: #89ddff; font-weight: bold; font-size: 14px; }
+    .detail-desc { background: #1a1b26; padding: 10px; border-radius: 6px; font-size: 12px; color: #c0caf5; min-height: 80px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>TCG Studio: Deck Builder & Card Inspector</h1>
+    <div class="header-stats">
+      <div>Main Deck: <strong id="main-deck-count" style="color:var(--accent);">0</strong> / 51 ใบ</div>
+      <div>Life Deck: <strong id="life-deck-count" style="color:var(--life-accent);">0</strong> / 15 ใบ</div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    
+    <!-- ฝั่งซ้าย: คลังการ์ด -->
+    <div class="panel">
+      <h2>1. คลังการ์ดทั้งหมด</h2>
+      <div id="card-collection" class="card-grid"></div>
+    </div>
+
+    <!-- ฝั่งขวา: จัดเด็ค & วิเคราะห์ -->
+    <div class="panel">
+      <h2>2. เด็คปัจจุบัน</h2>
+      
+      <!-- Main Deck Section -->
+      <div class="deck-section">
+        <h3><span>🎴 Main Deck</span> <span id="main-count-label" style="color:var(--accent);">0/51</span></h3>
+        <div id="main-deck-list" style="max-height: 180px; overflow-y: auto;"></div>
+      </div>
+
+      <!-- Life Deck Section -->
+      <div class="deck-section" style="border-color: #442b20;">
+        <h3 style="color:var(--life-accent);"><span>💖 Life Deck</span> <span id="life-count-label" style="color:var(--life-accent);">0/15</span></h3>
+        <div id="life-deck-list" style="max-height: 120px; overflow-y: auto;"></div>
+      </div>
+
+      <!-- Impact & Analytics Panel -->
+      <div class="impact-panel">
+        <h3>📊 Deck Impact & Analytics</h3>
+        <div style="font-size: 10px; color: #9aa5ce;">Cost Curve (กราฟแสดงค่าร่าย)</div>
+        <div class="cost-curve-container" id="cost-curve">
+          <!-- JS จะทำการสร้าง Bar สำหรับ Cost 0-7+ -->
+        </div>
+        <div class="impact-stat">
+          <span>ค่าร่ายเฉลี่ย (Avg Cost):</span>
+          <strong id="avg-cost" style="color:#89ddff;">0.0</strong>
+        </div>
+        <div class="impact-stat">
+          <span>สัดส่วนประเภทการ์ด:</span>
+          <span id="type-ratios" style="font-size:10px;">Army: 0 | Action: 0 | Nexus: 0</span>
+        </div>
+        <div id="synergy-warning" class="warning-box" style="display:none;"></div>
+      </div>
+
+      <div style="margin-top: 15px;">
+        <div class="form-group">
+          <label>ตั้งชื่อเด็คนี้:</label>
+          <input type="text" id="deck-name-input" placeholder="เช่น เด็คบุกเร็ว">
+        </div>
+        <button class="btn btn-save" id="save-deck-btn">💾 บันทึกเด็คนี้</button>
+        <div style="display:flex; gap:6px; margin-top:5px;">
+          <button class="btn btn-export" id="export-deck-btn">📤 Export Code</button>
+          <button class="btn btn-import" id="import-deck-btn">📥 Import Code</button>
+        </div>
+      </div>
+
+      <div class="saved-decks-list">
+        <h2>เด็คที่บันทึกไว้</h2>
+        <div id="saved-decks-container"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal Pop-up ซูมดูรูปเต็ม + ข้อมูลการ์ด -->
+  <div class="modal-overlay" id="inspect-modal">
+    <div class="modal-content">
+      <span class="modal-close" id="modal-close-btn">&times;</span>
+      <img id="modal-img" class="modal-preview-img" src="" alt="Card Zoom">
+      <div class="modal-details">
+        <h3 id="modal-title">Card Name</h3>
+        <div>
+          <span class="detail-badge" id="modal-type">Type</span>
+          <span class="detail-badge" id="modal-faction" style="background:#2ac3de; color:#000;">Faction</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-item">Cost (ค่าร่าย): <br><span id="modal-cost" style="color:#ffd700;">0</span></div>
+          <div class="detail-item">AP (โจมตี): <br><span id="modal-ap">0</span></div>
+          <div class="detail-item">AR (ป้องกัน): <br><span id="modal-ar">0</span></div>
+        </div>
+        <div style="font-size: 11px; color: #9aa5ce; margin-top: 4px;">เอฟเฟกต์ / คำอธิบาย:</div>
+        <div class="detail-desc" id="modal-desc">-</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const IMAGE_BASE_URL = "https://raw.githubusercontent.com/owlwhite1m-code/Card-game-Nexus-War-/main/images/";
+
+    function getCardImageUrl(imageName) {
+      if (imageName.startsWith("http://") || imageName.startsWith("https://")) {
+        return imageName;
+      }
+      return `${IMAGE_BASE_URL}${imageName}`;
+    }
+
+    let cardDatabase = [
+      { id: "C001", name: "The Grand Overseer-Alaric", type: "LORD", faction: "O.W.I", cost: 0, ap: 2, ar: 4, img: "alaric.jpg", desc: "(สกิลติดตัว) Nexus ทุกใบของคุณ ARMOR +1 (Active : 2/1T) ฟื้นฟู AR+2 Nexus คุณ 1 หน่วย 1ใบ หรือ เพิ่ม AR+2 Army เรา 1 ตัว จนจบเทิร์น ฝั่งตรงข้าม" },
+      { id: "C002", name: "Bunny Bastet Agis", type: "Elite", faction: "O.W.I", cost: 7, ap: 6, ar: 5, img: "bastet.jpg", desc: "[เกราะแตก]: (หากการด์ใบนี้ทำลาย AR ยูนิตศตรูสำเร็จให้ทำดาเมจซ้ำใส่ตัวนั้นอีกรอบลงสนาม: เลือกยูนิต 1 ใบ ทำดาเมจ 3 [ลงสนาม]: เลือกยูนิต 1 ใบ ทำดาเมจ 3" },
+      { id: "C003", name: "The Bone of us", type: "Action", faction: "O.W.I", cost: 3, ap: 0, ar: 0, img: "bone_of_us.jpg", desc: "[Main/Action] เลือกArmy เรา1ใบฟื้นฟูARเต็ม หากเรา มี Army [Type : O.W.I]สองใบขึ้นไปบนสนาม จั่ว +1" },
+      { id: "C004", name: "เร่ง การก่อสร้าง", type: "Action", faction: "O.W.I", cost: 1, ap: 0, ar: 0, img: "build_fast.jpg", desc: "[Main/Action]เปิดการด์บนกอง 4ใบ นำการด์Nexus [Type :0.W.I] จากในนั้น 1ใบขึ้นมือที่เหลือสับกลับเข้าเด็ค" },
+      { id: "C005", name: "พลก่อสร้าง ตุ้ดตุ่น", type: "Army", faction: "O.W.I", cost: 1, ap: 1, ar: 1, img: "builder.jpg", desc: "[ลงสนาม] : หากคุณมีNexus1 ใบขึ้นไป บนสนาม จัว 1" },
+      { id: "C006", name: "เพโอเทอส นักโทษนิรันด์", type: "Elite", faction: "O.W.I", cost: 10, ap: 8, ar: 9, img: "peotheus.jpg", desc: "[Guard][พิธีกรรม(การอัญเชิญแบบมีเงื่อนไข) จากบนมือทำลายNexus ของเรา 5ใบ เพื่อเรียกการด์ใบนี้ไม่จ่าย Cost[ลงสนาม] หากลงด้วย[พิธีกรรม] สังหาร Armyทุกใบ ที่ AR ไม่เกิน 5" },
+      { id: "C007", name: "ปืนใหญ่ บริษัท HellOwlfont จำกัด", type: "Nexus", faction: "O.W.I", cost: 4, ap: 0, ar: 0, img: "cannon.jpg", desc: "[เมื่อจบเทิร์น] ของเจ้าของ นอนการด์ใบนี้ สร้าง2ดาเมจใส่ Army/Elite ศตรู 1 ใบ" },
+      { id: "C008", name: "รวมพลัง ปูพรมทำลายล้าง", type: "Action", faction: "O.W.I", cost: 4, ap: 0, ar: 0, img: "carpet_bomb.jpg", desc: "[Main/Action] ทำความเสียหาย 1 ใส่ ยูนิตศตรูทุกใบบนสนามฝ่ายตรงข้าม +1 ด้วยตามจำนวนการด์ที่หงายอยู่บน Nexus เรา" },
+      { id: "C009", name: "ไซบอกซ์ แนวปะทะ Forca", type: "Army", faction: "O.W.I", cost: 6, ap: 5, ar: 5, img: "cyborg.jpg", desc: "[ลงสนาม] เลือก Armyศตรู ที่นอนอยู่ ARไม่เกิน 4นำกลับขึ้น มือ 1ใบ, [ติดตัว] AP,AR +1Army/Nexus [Type:O.w.] เรา ทุกใบ" },
+      { id: "C010", name: "อิศวินทมิฬ กลุ่มอีกาเลือด", type: "Army", faction: "O.W.I", cost: 5, ap: 3, ar: 6, img: "darkknight.jpg", desc: "[Guard][สั่งเสีย] เราได้รับ Ex 2 energy ในเทิร์นถัดไป" },
+      { id: "C011", name: "นายช่าง ดราโกคิก", type: "Army", faction: "O.W.I", cost: 3, ap: 3, ar: 4, img: "dragokick.jpg", desc: "[ลงสนาม] : เลือก Nexus หรือ Army 1ใบเพิ่มค่า AP+2, AR+2 ลนจบเทิร์น ฝ่ายตรงข้าม [สั่งเสีย](เมื่อตาย) : เปิด4ใบบนสุดค้นหาการด์Nexus 1ใบ ขึ้นมือ แล้วสับเด็ด" },
+      { id: "C012", name: "จงสู้ เราคือ HellOwlFont !!!", type: "Action", faction: "O.W.I", cost: 7, ap: 0, ar: 0, img: "fight_helloowl.jpg", desc: "เลือกผลของการด์ ดังต่อไปนี้ 1 อย่าง1. เรียก Army 2 ใบ ในสุสาน มาวางบนสนาม2. เรียก Elite ใบในสุสาน มาวางบนสนาม" },
+      { id: "C013", name: "กระบวนท่าสุดท้าย ปลิดชีพ อาลัยวรณ์", type: "Life", faction: "O.W.I", cost: 0, ap: 0, ar: 0, img: "life ปลิดชีฟ.jpg", desc: "หาก Lord เป็น The Grand Overseer-Alaricแล้วไลฟ์การด์คุณเหลือต่ำกว่า 3 ทำลาย ยูนิตศตรู1 ใบ ที่ cost ไม่เกิน 3 หากทำสำเร็จ ทำลายยูนิตศตรู 1ใบ ที่ cost ไม่เกิน 5 หากทำสำเร็จทำลาย Nexus ศตรู 2 ใบ หากทำสำเร็จ ทำดาเมจใส่life card คู่แข่ง 2 ใบ" },
+      { id: "C014", name: "ใหมองแร่พลังงานO.w.I", type: "Nexus", faction: "O.W.I", cost: 3, ap: 0, ar: 0, img: "mine.jpg", desc: "[Active] เมื่อจะมีการจ่าย costจับการด์ใบนี้นอนแทนการจ่าย cost-1" },
+      { id: "C015", name: "กับดัก ทุ่นระเบิด O.w.I B-02", type: "Nexus", faction: "O.W.I", cost: 4, ap: 0, ar: 0, img: "mine_trap.jpg", desc: "[ติดตัว] เมื่อ ยูนิตบนสนามรบเราถูกโจมตีจากยูนิตศตรูการโจมตีนั้น จะถูกลด AP-1 จนจบการต่อสู้" },
+      { id: "C016", name: "หุ่นยนต์ประจันบาน OwlGP-48", type: "Nexus", faction: "O.W.I", cost: 6, ap: 0, ar: 0, img: "owl_gp.jpg", desc: "[Active] จับนอนการด์ใบนี้ แทนการใช้ cost-1 [ติดตัว] เมื่อจบเทริน์ ของเราครบสามครั้ง สามารถเรียกการด์ใบนี้ลง สนาม โดยนับเป็น Army AP5,AR6" },
+      { id: "C017", name: "OwlGuard", type: "Army", faction: "O.W.I", cost: 2, ap: 1, ar: 2, img: "owlguard.jpg", desc: "[Guard] : จับนอนการด์ใบนี้เพื่อย้ายการโจมตีมาที่การด์ใบนี้" },
+      { id: "C018", name: "O.w.I Ranger", type: "Army", faction: "O.W.I", cost: 4, ap: 4, ar: 4, img: "ranger.jpg", desc: "[ลงสนาม]: หากมี Nexus ติด [Type:O.w.I] 2ใบขึ้นไป เลือกการด์ 1ใบ ยกเว้น Lord ทํา 2 ดาเมจ ใส่ [ติดตัว] : หากมีNexus 3ใบขึ้นไป การด์ใบนี้AP+2" },
+      { id: "C019", name: "ทีมเก็บกู้ซาก O.w.l", type: "Life", faction: "O.W.I", cost: 0, ap: 0, ar: 0, img: "ทีม กู้ซาก owl.jpg", desc: "หาก Lord เป็น Type :O.W.I สามารถวาง Nexusจากสุสาน มาวางในโซน Nexus ของเรา โดยไม่จ่ายCost 2ใบ ที่ cost ไม่เกิน 5" },
+      { id: "C020", name: "Healing potion", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "ยาดื่ม.jpg", desc: "นำใบบนสุดของ [Life Deck] มาวางไว้ใต้สุดของ Life zone" },
+      { id: "C021", name: "หลุมดัก คนโง่", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "หลุมดักคน.jpg", desc: "เลือก Army บนสนามของคู่แข่ง 1 ตัวจับการ์ดใบนั้นนอน" },
+      { id: "C022", name: "เจตจำนงแยก ของ Alaric", type: "Life", faction: "O.W.I", cost: 0, ap: 0, ar: 0, img: "เจต ตํานงแยกของ Alaric.jpg", desc: "หาก Lord เป็น The Grand Overseer-Alaric แล้วไลฟ์การด์คุณเหลือต่ำกว่า 5 อัญเชิญ โทเคน [Clone Alaric] [Type : O.W.1] Ap 5 AR 5[ติดตัว1/T] เมื่อการด์ใบนี้ นอน การด์ใบนี้จะ ตั้ง, แต่หากไลฟ์คุณมากกว่า 5 ให้จั่ว 1" },
+      { id: "C023", name: "Shield up", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "ให้โล่.jpg", desc: "เพิ่ม AR ให้ Lord 3 หน่วย" },
+      { id: "C024", name: "Draco phinus", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "Draco phinus.jpg", desc: "หาก lord ของเราคือ [Hadesmocus -Plague bringer-] และคู่แข่งมี การ์ดในสุสาน 20 ใบขึ้นไปนำการ์ดใบนี้ลงสนามรบ โดยเป็น Army ที่มีAtk 5 Shield 6เผ่า Void/มังกร[เมน] เทิร์นละ 1 ครั้ง ทำลาย spore โทเคน 3 ใบ หรือ สังหาร Army ของเรา 1 ใบ เพื่อ ทำลาย structure หรือ army ของคู่แข่ง 1 ใบ" },
+      { id: "C025", name: "Harvest soul", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "Havest soul.jpg", desc: "หาก lord ของเราคือ [Hadesmocus -Plague bringer-] และเรามีการ์ดในสุสาน 10 ใบหรือมากกว่าทำลาย Army ทั้งหมดบนสนามของคู่แข่ง" },
+      { id: "C026", name: "Spore Egg", type: "Nexus", faction: "-", cost: 4, ap: 0, ar: 0, img: "Spore Egg.jpg", desc: "{สุสาน}[เมน] ชื่อละ 1 ครั้ง สามารถเล่นการ์ดใบนี้โดยจายค่า Cost ตามปกติได้ จากนั้นทิ้งมือหนึ่งใบ[Ex energy](สามารถจับการ์ดใบนี้นอนเพื่อใช้แทน energy ได้ 1 คอส)[เมน] ทำลายการ์ดใบนี้เพื่อทิ้งใบบนสุดของผู้เล่นทั้ง 2 ฝ่าย 3 ใบ" },
+      { id: "C027", name: "Call of the plague", type: "Action", faction: "-", cost: 3, ap: 0, ar: 0, img: "call of ม่วง.jpg", desc: "สังหารอาร์มี่ของเรา 1 ตัวเพื่อวาง spore บน structure zone ของคู่แข่งได้ 2 ใบ" },
+      { id: "C028", name: "Gate of the void", type: "Nexus", faction: "-", cost: 3, ap: 0, ar: 0, img: "gete way.jpg", desc: "[เมน] ทิ้งมือ 1 ใบ แล้วจากนั้น นำการ์ด คอส 5 หรือต่ำกว่าขึ้นมือ[เมื่อจบเทิร์นของคู่แข่ง] สามารถนำการ์ด 1 ใบที่ไม่ใช่ Elite กลับเข้าใต้กองแล้วนำการ์ดใบนี้ขึ้นมือได้" },
+      { id: "C029", name: "Hadesmocus -Plague bringer-", type: "LORD", faction: "Void", cost: 0, ap: 2, ar: 4, img: "lord ม่วง.jpg", desc: "[Active] [เมน] ด้วยการทิ้งมือหรือสังเวยยูนิทของคุณนอกเหนือจากลอร์ด 1 ใบ วาง token structure 'Spore' ไว้บนสนามของศัตรู [ติดตัว] 'spore' โทเคนทุกใบมีความสามารถ [[เมื่อจบเทิร์น] ถ้าคุณมี 'Spore' โทเคน บนสนามของคุณ 2 ใบขึ้นไป ทำลายมันทั้งหมด แล้วทิ้งใบบนสุดของกองการ์ดคุณ 2 ใบต่อทุกๆ 'spore' โทเค่นที่ถูกทำลายไป] และ [เมน] สามารถจ่าย 1 เอนเนอร์จี้ หรือ ทิ้งมือ 2 ใบเพื่อทำลายการ์ดใบนี้ได้" },
+      { id: "C030", name: "The end is near", type: "Life", faction: "-", cost: 0, ap: 0, ar: 0, img: "the end is near.jpg", desc: "หาก lord ของเราคือ [Hadesmocus -Plague bringer-] วาง spore โทเคนบน structure zone ของคู่แข่ง 2 ใบ" },
+      { id: "C031", name: "Infected flower", type: "Army", faction: "ติดเชื้อ/พืช", cost: 3, ap: 2, ar: 1, img: "ดอก ติดเชื้อม่วง.jpg", desc: "[ในเทิร์นคุณ] การโจมตีของใบนี้จะสามารถทำดาเมจใส่ยูนิท Cost 3 ต่ำได้โดยไม่สนค่า shield[เมื่อจบการโจมตี] สามารถทิ้งใบบนสุดของกองการ์ดคุณ 3 ใบแล้วหยิบการ์ด 1 ใบจากสุสานขึ้นมือได้ หลังจากนั้นนำการ์ดใบนี้เข้าใต้กองการ์ด" },
+      { id: "C032", name: "Abomination", type: "Army", faction: "ติดเชื้อ/กลายพันธุ์", cost: 10, ap: 9, ar: 6, img: "ตัวยํา ม่วง.jpg", desc: "การ์ดใบนี้มีค่าคอส -1 ตามจำนวนการ์ดในสุสานของผู้เล่นทุกคน ทุกๆ 6 ใบ" },
+      { id: "C033", name: "Rise of the plague", type: "Action", faction: "-", cost: 4, ap: 0, ar: 0, img: "ทหารโทเคน ม่วง.jpg", desc: "[Blink] (สามารถใช้งานเมื่อคู่แข่งโจมตีได้)ลง อาร์มี่โทเคน [remnant] Atk 3 shield 2 ที่มีความสามารถ [[guard](จับการ์ดใบนี้นอนเพื่อเปลี่ยนเป้าหมายการโจมตีมายังการ์ดใบนี้ได้)[เมื่อจบเทิร์นของคู่แข่ง] ทำลายการ์ดใบนี้แล้วทิ้งใบบนสุดของกองการ์ดคุณ 1 ใบ] ได้" },
+      { id: "C034", name: "The infected", type: "Army", faction: "ติดเชื้อ/มนุษย์", cost: 1, ap: 2, ar: 0, img: "ผู้ติดเชี้ย ม่วง.jpg", desc: "[เมื่อถูกสังหาร] ด้วยการทิ้งเด็คของคุณ 2 ใบ หรือทิ้งมือ 1 ใบ วาง 'spore' token ไว้ในสนามของคู่แข่ง" },
+      { id: "C035", name: "Infected tank", type: "Army", faction: "ติดเชื้อ/เครื่องจักร", cost: 5, ap: 6, ar: 4, img: "รถถัง ม่สง.jpg", desc: "[เมื่อโจมตี] สามารถทำลายอาร์มี่ของเราหนึ่งตัวเพื่อ สร้างความเสียหาย 3 ดาเมจให้ศัตรู 1 ตัว" },
+      { id: "C036", name: "Floating Spore", type: "Army", faction: "เชื้อรา/ผู้เผยแพร่", cost: 3, ap: 0, ar: 4, img: "รังไข่บิน ม่วง.jpg", desc: "[เมื่อจบเทิร์นของเรา] {สุสาน} เราสามารถ ทำลาย spore โทเคนจากที่ไหนก็ได้ 1 ใบเพื่ออัญเชิญลงมาบนสนามโดยไม่จ่ายคอส[เมน] เทิร์นละครั้ง สามารถทิ้งมือ 1 ใบและจ่าย 2 เอเนอจี้เพื่อวาง spore โทเคนลง structure zone ของคู่แข่งได้ 2 ใบ" },
+      { id: "C037", name: "Lurker", type: "Army", faction: "ติดเชื้อ/พืช", cost: 2, ap: 3, ar: 2, img: "ลุกเกอร์ พืช ม่วง.jpg", desc: "[ในเทิร์นคู่แข่ง] [สั่งเสีย] เมื่อการ์ดใบนี้จะถูกทำลายสามารถทิ้งมือของคุณ 2 ใบเพื่อวางโทเคน 'spore' ไว้บน structure zone ของคู่แข่งได้ ถ้าทำจั่ว 1" },
+      { id: "C038", name: "Worm", type: "Army", faction: "ติดเชื้อ/แมลง", cost: 1, ap: 1, ar: 0, img: "หนอน ม่วง.jpg", desc: "[สั่งเสีย] จั่ว 1 จากนั้นหากมีมือมากกว่า 6 ให้ทิ้งมือ 1 ใบ" },
+      { id: "C039", name: "Camila -Queen of the plague-", type: "Elite", faction: "Void/ ผู้เผยแพร่", cost: 6, ap: 5, ar: 6, img: "อีลิทม่วง แมงมุม.jpg", desc: "การ์ดใบนี้ไม่สามารถถูกนำออกสนามรบได้นอกเหนือจากการสังหารเท่านั้น [เมน] สังหารอาร์มี่บนสนามของคุณ 1 ใบเพื่อวาง spore โทเคน บน structure zone ของคู่แข่ง 3 ใบได้" },
+      { id: "C040", name: "Tactical change", type: "Action", faction: "-", cost: 4, ap: 0, ar: 0, img: "เปลี่ยนแผน.jpg", desc: "จั่วการ์ด 2 ใบจากกองการ์ด จากนั้น ทิ้งการ์ดบนมือ 2 ใบ" },
+      { id: "C041", name: "Vultura -chaos knight-", type: "Elite", faction: "Void/โกลาหล", cost: 7, ap: 0, ar: 7, img: "โกเลม ม่วง.jpg", desc: "[ติดตัว] การ์ดใบนี้มี ATK +1 ตามการ์ดในหลุมของคุณทุกๆ 3 ใบ [เมื่อโจมตี] ทิ้งใบบนสุดของกองการ์ดคุณ 4 ใบ วางโทเคน spore บน structure zone ของคู่แข่ง 4 ใบ" }
+    ];
+
+    let mainDeck = {};
+    let lifeDeck = {};
+    let savedDecks = JSON.parse(localStorage.getItem("my_saved_decks")) || [];
+
+    function renderCollection() {
+      const container = document.getElementById("card-collection");
+      container.innerHTML = "";
+      cardDatabase.forEach(card => {
+        const fullImgUrl = getCardImageUrl(card.img);
+        const isLifeCard = card.type.toUpperCase() === "LIFE";
+        const div = document.createElement("div");
+        div.className = "card-item";
+        div.innerHTML = `
+          <span class="card-type-tag" style="${isLifeCard ? 'background:var(--life-accent); color:#000;' : ''}">${card.type}</span>
+          <div class="card-title">${card.name}</div>
+          <img class="card-img" src="${fullImgUrl}" onerror="this.src='https://via.placeholder.com/120x95?text=${encodeURIComponent(card.name)}'">
+          <div class="card-stats"><span>AP:${card.ap}</span><span>AR:${card.ar}</span></div>
+          <div class="card-actions">
+            ${isLifeCard 
+              ? `<button class="btn-sm btn-add-life" onclick="addCardToLifeDeck('${card.id}')">+ Life Deck</button>` 
+              : `<button class="btn-sm btn-add" onclick="addCardToMainDeck('${card.id}')">+ Main Deck</button>`
+            }
+            <button class="btn-sm btn-inspect" onclick="inspectCard('${card.id}')">🔍 ดู</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function inspectCard(id) {
+      const card = cardDatabase.find(c => c.id === id);
+      if (!card) return;
+
+      document.getElementById("modal-img").src = getCardImageUrl(card.img);
+      document.getElementById("modal-title").textContent = card.name;
+      document.getElementById("modal-type").textContent = "ประเภท: " + card.type;
+      document.getElementById("modal-faction").textContent = "เผ่า/สังกัด: " + card.faction;
+      document.getElementById("modal-ap").textContent = card.ap;
+      document.getElementById("modal-ar").textContent = card.ar;
+      document.getElementById("modal-desc").textContent = card.desc || "ไม่มีคำอธิบาย";
+      document.getElementById('modal-cost').textContent = card.cost;
+
+      document.getElementById("inspect-modal").style.display = "flex";
+    }
+
+    document.getElementById("modal-close-btn").onclick = () => {
+      document.getElementById("inspect-modal").style.display = "none";
+    };
+
+    // ================= MAIN DECK LOGIC =================
+    function addCardToMainDeck(id) {
+      const card = cardDatabase.find(c => c.id === id);
+      if (!card) return;
+
+      if (card.type.toUpperCase() === "LIFE") {
+        return alert("การ์ดประเภท Life ไม่สามารถใส่ใน Main Deck ได้!");
+      }
+
+      const currentCount = mainDeck[id] || 0;
+      const totalCount = Object.values(mainDeck).reduce((a, b) => a + b, 0);
+
+      if (totalCount >= 51) {
+        return alert("Main Deck เต็มแล้ว (สูงสุด 51 ใบ)");
+      }
+
+      if (card.type.toUpperCase() === "LORD") {
+        if (currentCount >= 1) return alert("การ์ด LORD ใส่ได้เพียง 1 ใบเท่านั้น");
+        const hasOtherLord = Object.keys(mainDeck).some(cardId => {
+          const c = cardDatabase.find(item => item.id === cardId);
+          return c && c.type.toUpperCase() === "LORD" && mainDeck[cardId] > 0;
+        });
+        if (hasOtherLord) return alert("Main Deck มีการ์ด LORD อยู่แล้ว");
+      }
+
+      if (card.type.toUpperCase() === "ELITE") {
+        if (currentCount >= 2) return alert(`การ์ด Elite [${card.name}] ใส่ซ้ำได้ไม่เกิน 2 ใบ`);
+        let totalElite = 0;
+        for (const cardId in mainDeck) {
+          const c = cardDatabase.find(item => item.id === cardId);
+          if (c && c.type.toUpperCase() === "ELITE") totalElite += mainDeck[cardId];
+        }
+        if (totalElite >= 4) return alert("ใน Main Deck มีการ์ด Elite รวมกันได้ไม่เกิน 4 ใบ");
+      }
+
+      if (card.type.toUpperCase() !== "LORD" && card.type.toUpperCase() !== "ELITE") {
+        if (currentCount >= 4) return alert(`การ์ด [${card.name}] ใส่ซ้ำได้ไม่เกิน 4 ใบ`);
+      }
+
+      mainDeck[id] = currentCount + 1;
+      updateDeckUI();
+    }
+
+    function removeCardFromMainDeck(id) {
+      if (mainDeck[id]) {
+        mainDeck[id]--;
+        if (mainDeck[id] <= 0) delete mainDeck[id];
+        updateDeckUI();
+      }
+    }
+
+    // ================= LIFE DECK LOGIC =================
+    function addCardToLifeDeck(id) {
+      const card = cardDatabase.find(c => c.id === id);
+      if (!card) return;
+
+      if (card.type.toUpperCase() !== "LIFE") {
+        return alert("Life Deck สามารถใส่ได้เฉพาะการ์ดที่มี Type : Life เท่านั้น!");
+      }
+
+      const currentCount = lifeDeck[id] || 0;
+      const totalCount = Object.values(lifeDeck).reduce((a, b) => a + b, 0);
+
+      if (totalCount >= 15) {
+        return alert("Life Deck เต็มแล้ว (สูงสุด 15 ใบ)");
+      }
+
+      if (currentCount >= 4) {
+        return alert(`การ์ด Life [${card.name}] ใส่ซ้ำได้ไม่เกิน 4 ใบ`);
+      }
+
+      lifeDeck[id] = currentCount + 1;
+      updateDeckUI();
+    }
+
+    function removeCardFromLifeDeck(id) {
+      if (lifeDeck[id]) {
+        lifeDeck[id]--;
+        if (lifeDeck[id] <= 0) delete lifeDeck[id];
+        updateDeckUI();
+      }
+    }
+
+    // ================= ANALYTICS & IMPACT SYSTEM =================
+    function renderAnalytics() {
+      const costBuckets = [0, 0, 0, 0, 0, 0, 0, 0]; // 0, 1, 2, 3, 4, 5, 6, 7+
+      let totalCost = 0;
+      let nonLordCount = 0;
+      let armyCount = 0, actionCount = 0, nexusCount = 0;
+
+      let lordCard = null;
+      let hasSporeCards = false;
+
+      for (const id in mainDeck) {
+        const count = mainDeck[id];
+        const card = cardDatabase.find(c => c.id === id);
+        if (!card) continue;
+
+        if (card.type.toUpperCase() === "LORD") {
+          lordCard = card;
+        } else {
+          totalCost += card.cost * count;
+          nonLordCount += count;
+          const bucketIndex = card.cost >= 7 ? 7 : card.cost;
+          costBuckets[bucketIndex] += count;
+        }
+
+        const typeUpper = card.type.toUpperCase();
+        if (typeUpper === "ARMY" || typeUpper === "ELITE") armyCount += count;
+        else if (typeUpper === "ACTION") actionCount += count;
+        else if (typeUpper === "NEXUS") nexusCount += count;
+
+        if (card.desc && card.desc.toLowerCase().includes("spore")) {
+          hasSporeCards = true;
+        }
+      }
+
+      // Render Cost Curve Graph
+      const curveContainer = document.getElementById("cost-curve");
+      curveContainer.innerHTML = "";
+      const maxInBucket = Math.max(...costBuckets, 1);
+
+      costBuckets.forEach((count, idx) => {
+        const heightPercent = Math.round((count / maxInBucket) * 100);
+        const barGroup = document.createElement("div");
+        barGroup.className = "bar-group";
+        const label = idx === 7 ? "7+" : idx;
+        barGroup.innerHTML = `
+          <div style="font-size:8px; color:#a9b1d6;">${count > 0 ? count : ''}</div>
+          <div class="bar" style="height: ${Math.max(heightPercent, 5)}%; background:${count > 0 ? 'var(--accent)' : '#292e42'};"></div>
+          <div class="bar-label">${label}</div>
+        `;
+        curveContainer.appendChild(barGroup);
+      });
+
+      // Stats Update
+      const avgCost = nonLordCount > 0 ? (totalCost / nonLordCount).toFixed(1) : "0.0";
+      document.getElementById("avg-cost").textContent = avgCost;
+      document.getElementById("type-ratios").textContent = `Army: ${armyCount} | Action: ${actionCount} | Nexus: ${nexusCount}`;
+
+      // Synergy & Warnings Checks
+      const warningBox = document.getElementById("synergy-warning");
+      let warnings = [];
+
+      if (lordCard) {
+        if (lordCard.id === "C029" && !hasSporeCards) { // Hadesmocus
+          warnings.push("⚠️ Lord ของคุณคือ Hadesmocus แต่เด็คไม่มีการ์ดที่ทำคอมโบเกี่ยวกับ Spore");
+        }
+        if (lordCard.id === "C001" && nexusCount < 4) { // Alaric
+          warnings.push("💡 Alaric ทำงานได้ดีกับ Nexus (ปัจจุบันมี Nexus เพียง " + nexusCount + " ใบ)");
+        }
+      } else {
+        warnings.push("⚠️ เด็คนี้ยังไม่มีการ์ด LORD");
+      }
+
+      if (warnings.length > 0) {
+        warningBox.style.display = "block";
+        warningBox.innerHTML = warnings.join("<br>");
+      } else {
+        warningBox.style.display = "none";
+      }
+    }
+
+    // ================= EXPORT & IMPORT SYSTEM =================
+    document.getElementById("export-deck-btn").onclick = () => {
+      if (Object.keys(mainDeck).length === 0 && Object.keys(lifeDeck).length === 0) {
+        return alert("โปรดเลือกการ์ดเข้าเด็คก่อนทำ Export!");
+      }
+
+      const deckData = {
+        name: document.getElementById("deck-name-input").value.trim() || "Untitled Deck",
+        main: mainDeck,
+        life: lifeDeck
+      };
+
+      try {
+        const jsonString = JSON.stringify(deckData);
+        const encodedCode = btoa(encodeURIComponent(jsonString));
+        navigator.clipboard.writeText(encodedCode).then(() => {
+          alert("📋 คัดลอก Deck Code เรียบร้อยแล้ว! นำไปส่งให้เพื่อนได้ทันที");
+        }).catch(() => {
+          prompt("คัดลอก Deck Code ด้านล่างนี้:", encodedCode);
+        });
+      } catch (e) {
+        alert("เกิดข้อผิดพลาดในการสร้าง Code");
+      }
+    };
+
+    document.getElementById("import-deck-btn").onclick = () => {
+      const code = prompt("วาง Deck Code ที่ต้องการ Import:");
+      if (!code) return;
+
+      try {
+        const jsonString = decodeURIComponent(atob(code.trim()));
+        const deckData = JSON.parse(jsonString);
+
+        if (deckData.main && deckData.life) {
+          mainDeck = { ...deckData.main };
+          lifeDeck = { ...deckData.life };
+          if (deckData.name) document.getElementById("deck-name-input").value = deckData.name;
+          updateDeckUI();
+          alert(`📥 นำเข้าเด็ค "${deckData.name || 'Imported Deck'}" สำเร็จ!`);
+        } else {
+          alert("รูปแบบ Deck Code ไม่ถูกต้อง");
+        }
+      } catch (e) {
+        alert("Deck Code ไม่ถูกต้อง หรือเสียหาย");
+      }
+    };
+
+    // ================= UPDATE UI =================
+    function updateDeckUI() {
+      // Main Deck Render
+      const mainList = document.getElementById("main-deck-list");
+      mainList.innerHTML = "";
+      let mainTotal = 0;
+      for (const id in mainDeck) {
+        const count = mainDeck[id];
+        mainTotal += count;
+        const card = cardDatabase.find(c => c.id === id);
+        const row = document.createElement("div");
+        row.className = "deck-row";
+        row.innerHTML = `
+          <div><strong>${card ? card.name : id}</strong> <span style="font-size:11px; color:#a9b1d6;">x${count}</span></div>
+          <button class="btn btn-danger" onclick="removeCardFromMainDeck('${id}')">ลบ</button>
+        `;
+        mainList.appendChild(row);
+      }
+
+      // Life Deck Render
+      const lifeList = document.getElementById("life-deck-list");
+      lifeList.innerHTML = "";
+      let lifeTotal = 0;
+      for (const id in lifeDeck) {
+        const count = lifeDeck[id];
+        lifeTotal += count;
+        const card = cardDatabase.find(c => c.id === id);
+        const row = document.createElement("div");
+        row.className = "deck-row";
+        row.innerHTML = `
+          <div><strong>${card ? card.name : id}</strong> <span style="font-size:11px; color:#a9b1d6;">x${count}</span></div>
+          <button class="btn btn-danger" onclick="removeCardFromLifeDeck('${id}')">ลบ</button>
+        `;
+        lifeList.appendChild(row);
+      }
+
+      document.getElementById("main-deck-count").textContent = mainTotal;
+      document.getElementById("main-count-label").textContent = `${mainTotal}/51`;
+      document.getElementById("life-deck-count").textContent = lifeTotal;
+      document.getElementById("life-count-label").textContent = `${lifeTotal}/15`;
+
+      renderAnalytics();
+    }
+
+    // ================= SAVE & LOAD DECK =================
+    document.getElementById("save-deck-btn").onclick = () => {
+      const name = document.getElementById("deck-name-input").value.trim();
+      if (!name) return alert("โปรดตั้งชื่อเด็คก่อนบันทึก!");
+
+      let lordCount = 0;
+      let nonLordCount = 0;
+      for (const cardId in mainDeck) {
+        const c = cardDatabase.find(item => item.id === cardId);
+        if (c && c.type.toUpperCase() === "LORD") lordCount += mainDeck[cardId];
+        else nonLordCount += mainDeck[cardId];
+      }
+
+      if (lordCount !== 1) {
+        return alert("Main Deck ต้องมีการ์ด LORD จำนวน 1 ใบเท่านั้น");
+      }
+      if (nonLordCount !== 50) {
+        return alert(`Main Deck ต้องมีการ์ดทั่วไปครบ 50 ใบ (ปัจจุบันมี ${nonLordCount} ใบ)`);
+      }
+
+      const lifeTotal = Object.values(lifeDeck).reduce((a, b) => a + b, 0);
+      if (lifeTotal !== 15) {
+        return alert(`Life Deck ต้องมีการ์ด Type: Life ครบ 15 ใบพอดี (ปัจจุบันมี ${lifeTotal} ใบ)`);
+      }
+
+      savedDecks.push({
+        id: "DECK_" + Date.now(),
+        name: name,
+        mainDeck: { ...mainDeck },
+        lifeDeck: { ...lifeDeck }
+      });
+
+      localStorage.setItem("my_saved_decks", JSON.stringify(savedDecks));
+      document.getElementById("deck-name-input").value = "";
+      renderSavedDecks();
+      alert("บันทึกเด็คเรียบร้อย!");
+    };
+
+    function renderSavedDecks() {
+      const container = document.getElementById("saved-decks-container");
+      container.innerHTML = "";
+      savedDecks.forEach((deck, index) => {
+        const div = document.createElement("div");
+        div.className = "saved-deck-item";
+        div.innerHTML = `
+          <span><strong>${deck.name}</strong></span>
+          <div>
+            <button class="btn" style="padding:2px 8px; font-size:10px; width:auto;" onclick="loadDeck(${index})">ดึงมาใช้</button>
+            <button class="btn btn-danger" onclick="deleteDeck(${index})">X</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function loadDeck(index) {
+      const selected = savedDecks[index];
+      mainDeck = selected.mainDeck ? { ...selected.mainDeck } : { ...selected.cards };
+      lifeDeck = selected.lifeDeck ? { ...selected.lifeDeck } : {};
+      document.getElementById("deck-name-input").value = selected.name;
+      updateDeckUI();
+    }
+
+    function deleteDeck(index) {
+      savedDecks.splice(index, 1);
+      localStorage.setItem("my_saved_decks", JSON.stringify(savedDecks));
+      renderSavedDecks();
+    }
+
+    renderCollection();
+    renderSavedDecks();
+  </script>
+</body>
+</html>

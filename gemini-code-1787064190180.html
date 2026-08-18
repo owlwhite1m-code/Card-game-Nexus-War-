@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TCG Battle Simulator Mobile Supported</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --board-bg: #121520;
+      --zone-border: #2e354f;
+      --accent: #7aa2f7;
+      --life-accent: #ff9e64;
+    }
+
+    * { 
+      box-sizing: border-box; margin: 0; padding: 0; user-select: none; 
+      -webkit-user-select: none; -webkit-touch-callout: none;
+      font-family: 'Segoe UI', Tahoma, sans-serif; 
+    }
+    body { background-color: var(--bg); color: #fff; overflow: hidden; height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
+
+    #lobby {
+      position: absolute; inset: 0; background: rgba(9, 10, 15, 0.95);
+      display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .lobby-box { background: #1a1c2a; padding: 20px; border-radius: 12px; border: 1px solid var(--accent); width: 90%; max-width: 380px; }
+    .lobby-box h2 { font-size: 18px; margin-bottom: 12px; color: var(--accent); text-align: center; }
+    .lobby-box input { width: 100%; padding: 10px; margin-bottom: 10px; background: #0f1015; border: 1px solid #3b4261; border-radius: 6px; color: #fff; font-size: 14px; }
+    .btn { width: 100%; padding: 12px; background: var(--accent); color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-bottom: 8px; font-size: 14px; }
+    .btn-secondary { background: #3b4261; color: #fff; }
+    .btn-xs { padding: 4px 6px; font-size: 10px; background: var(--life-accent); color: #000; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; }
+
+    #control-bar {
+      position: fixed; top: 10px; left: 10px; z-index: 200; display: flex; gap: 10px;
+    }
+    .btn-mode {
+      padding: 8px 14px; background: #e0af68; color: #000; font-weight: bold; border: 2px solid #fff; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); font-size: 12px;
+    }
+    .btn-mode.active { background: #f7768e; color: #fff; border-color: #f7768e; }
+
+    #arena {
+      flex: 1; perspective: 1000px; display: flex; justify-content: center; align-items: center; overflow: auto; background: radial-gradient(circle, #1a1d2e 0%, #090a0f 100%);
+    }
+    #board {
+      width: 1000px; height: 620px; background: var(--board-bg); border: 3px solid #2ac3de; border-radius: 16px;
+      transform: rotateX(20deg); transform-style: preserve-3d; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; position: relative;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8); transition: transform 0.3s; flex-shrink: 0;
+    }
+    #board.flat-mode { transform: rotateX(0deg) !important; }
+
+    .player-side { display: flex; flex-direction: column; gap: 6px; position: relative; width: 100%; }
+    .opponent-side { transform: rotate(180deg); }
+
+    .row-battle { display: flex; justify-content: center; height: 105px; gap: 6px; border: 1px dashed var(--zone-border); border-radius: 8px; padding: 4px; position: relative; }
+    .row-middle { display: flex; gap: 6px; height: 95px; align-items: center; }
+    .row-energy-strip { display: flex; gap: 6px; height: 90px; border: 1px dashed #3d59a1; border-radius: 6px; padding: 4px; background: rgba(61, 89, 161, 0.05); overflow-x: auto; flex: 1; align-items: center; }
+
+    .zone {
+      border: 1px solid var(--zone-border); border-radius: 6px; background: rgba(255,255,255,0.02);
+      display: flex; align-items: center; justify-content: center; position: relative; font-size: 10px; color: #565f89; text-align: center;
+    }
+    .zone-title { position: absolute; top: 2px; left: 4px; font-size: 8px; opacity: 0.6; pointer-events: none; }
+
+    .deck-zone { width: 65px; height: 90px; cursor: pointer; flex-direction: column; gap: 2px; flex-shrink: 0; position: relative; }
+    .lord-zone { width: 65px; height: 90px; border-color: #bb9af7; flex-shrink: 0; }
+    .nexus-zone { flex: 1; display: flex; gap: 6px; padding: 4px; overflow-x: auto; height: 90px; }
+    
+    .life-zone-container { 
+      display: flex; gap: 4px; width: 180px; padding: 4px; 
+      overflow-x: auto; overflow-y: hidden; height: 90px; align-items: center;
+    }
+
+    .deck-visual {
+      width: 58px; height: 82px; border-radius: 5px;
+      background-image: url('https://raw.githubusercontent.com/owlwhite1m-code/Card-game-Nexus-War-/main/images/card_back.jpg');
+      background-size: cover; border: 1px solid #fff; transition: all 0.2s; position: relative;
+    }
+    .deck-count-badge {
+      position: absolute; bottom: 3px; right: 3px; background: #7aa2f7; color: #000;
+      font-weight: bold; font-size: 10px; padding: 1px 5px; border-radius: 8px; z-index: 10;
+    }
+
+    .graveyard-stack { position: relative; width: 65px; height: 90px; cursor: pointer; }
+    .graveyard-stack .card { position: absolute; top: 0; left: 0; transform: rotate(0deg) !important; }
+    .graveyard-count { position: absolute; bottom: 2px; right: 2px; background: #f7768e; color: #000; font-weight: bold; font-size: 10px; padding: 1px 5px; border-radius: 10px; z-index: 10; }
+
+    .card {
+      width: 58px; height: 82px; background-size: cover; background-position: center; border-radius: 5px;
+      border: 1px solid #fff; cursor: pointer; position: relative; transition: transform 0.15s; background-color: #1a1b26;
+      transform: rotate(0deg); flex-shrink: 0; z-index: 5;
+    }
+    .edit-active .card { border: 2px solid #e0af68; box-shadow: 0 0 8px #e0af68; }
+    .card.exhausted { transform: rotate(90deg) !important; }
+    .card-back { background-image: url('https://raw.githubusercontent.com/owlwhite1m-code/Card-game-Nexus-War-/main/images/card_back.jpg') !important; background-size: cover !important; }
+    .energy-card { background-color: #3d59a1; border-color: #7aa2f7; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 8px; color: #fff; }
+
+    .hand-area {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 6px; z-index: 500; padding: 6px 12px; background: rgba(15, 16, 21, 0.95); border-radius: 10px; border: 1px solid var(--accent);
+      max-width: 95vw; overflow-x: auto; min-height: 95px; align-items: center;
+    }
+    #player-hand { bottom: 5px; }
+    #opponent-hand { top: 5px; border-color: #f7768e; }
+    #player-hand .card:active { transform: translateY(-10px) scale(1.1); z-index: 10; }
+
+    #context-menu {
+      position: fixed; display: none; background: #1f2335; border: 1px solid var(--accent); border-radius: 8px; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.8); min-width: 170px;
+    }
+    #context-menu div { padding: 12px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #292e42; color: #fff; }
+    #context-menu div:active { background: var(--accent); color: #000; font-weight: bold; }
+
+    #gy-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1500; display: none;
+      flex-direction: column; align-items: center; justify-content: center; padding: 15px;
+    }
+    .gy-box { background: #1a1c2a; border: 1px solid var(--accent); border-radius: 10px; width: 95%; max-width: 700px; padding: 15px; height: 80vh; display: flex; flex-direction: column; }
+    .gy-cards { flex: 1; display: flex; flex-wrap: wrap; gap: 10px; overflow-y: auto; padding: 10px; margin-top: 10px; background: #0f1015; border-radius: 6px; align-content: flex-start; }
+    .gy-card-wrapper { display: flex; flex-direction: column; align-items: center; gap: 5px; background: #1f2335; padding: 6px; border-radius: 6px; }
+    .gy-card-actions { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+    .btn-gy-action { font-size: 9px; padding: 4px; background: #3d59a1; border: none; color: white; border-radius: 3px; cursor: pointer; }
+    .btn-gy-action:active { background: var(--accent); color: black; }
+  </style>
+</head>
+<body oncontextmenu="return false;">
+
+  <div id="control-bar">
+    <button class="btn-mode" id="toggle-edit-btn" onclick="toggleEditMode()">🛠️ เปิดโหมดจัดการการ์ด</button>
+  </div>
+
+  <div id="lobby">
+    <div class="lobby-box">
+      <h2>⚔️ TCG Battle Simulator</h2>
+      <input type="text" id="deck-code-input" placeholder="วาง Deck Code จากเว็ปจัดเด็ค">
+      <hr style="border-color:#292e42; margin-bottom:10px;">
+      <button class="btn" id="create-room-btn">สร้างห้องต่อสู้</button>
+      <div id="room-code-display" style="display:none; margin-bottom:10px; text-align:center;">
+        <span id="lobby-status" style="font-size:12px; color:#e0af68; display:block; margin-bottom:5px;"></span>
+        <button class="btn btn-secondary" id="copy-code-btn" style="padding:8px; font-size:12px;">📋 คัดลอก Code ห้อง</button>
+      </div>
+      <div style="display:flex; gap:5px;">
+        <input type="text" id="room-code-input" placeholder="ใส่ Code ห้องเพื่อน" style="margin:0;">
+        <button class="btn btn-secondary" id="join-room-btn" style="width:110px; margin:0;">เข้าห้อง</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hand-area" id="opponent-hand"></div>
+
+  <div id="arena">
+    <div id="board">
+      
+      <!-- OPPONENT SIDE -->
+      <div class="player-side opponent-side" id="opponent-side">
+        <div class="row-middle">
+          <div style="display:flex; gap:5px;">
+            <div class="zone deck-zone"><span class="zone-title">LIFE DECK</span></div>
+            <div class="life-zone-container zone" id="opp-life-zone"><span class="zone-title">LIFE ZONE</span></div>
+          </div>
+          <div class="zone nexus-zone" id="opp-nexus-zone"><span class="zone-title">NEXUS ZONE</span></div>
+          <div class="zone lord-zone" id="opp-lord-zone"><span class="zone-title">LORD</span></div>
+          <div style="display:flex; gap:5px;">
+            <div class="zone deck-zone graveyard-stack" id="opp-graveyard"><span class="zone-title">GRAVEYARD</span></div>
+            <div class="zone deck-zone" id="opp-main-deck-zone">
+              <span class="zone-title">MAIN DECK</span>
+              <div class="deck-visual" id="opp-deck-visual"><span class="deck-count-badge" id="opp-deck-count">0</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="row-energy-strip zone" id="opp-energy-zone"><span class="zone-title">ENERGY ZONE</span></div>
+        <div class="row-battle zone" id="opp-battlefield"><span class="zone-title">BATTLEFIELD</span></div>
+      </div>
+
+      <!-- PLAYER SIDE -->
+      <div class="player-side" id="player-side">
+        <div class="row-battle zone" id="p-battlefield"><span class="zone-title">BATTLEFIELD</span></div>
+        <div class="row-energy-strip zone" id="p-energy-zone" onclick="addEnergyCard(event)">
+          <span class="zone-title">ENERGY ZONE (แตะพื้นที่ว่างเพิ่ม Energy)</span>
+        </div>
+        <div class="row-middle">
+          <div style="display:flex; gap:5px;">
+            <div class="zone deck-zone" id="p-life-deck" onclick="drawLifeCard()">
+              <span class="zone-title">LIFE DECK</span>
+              <button class="btn-xs" onclick="event.stopPropagation(); shuffleLifeDeck()">สับกอง</button>
+              <button class="btn-xs" onclick="event.stopPropagation(); addLifeCount(1)">+ เพิ่ม</button>
+              <button class="btn-xs" onclick="event.stopPropagation(); addLifeCount(-1)">- ลด</button>
+            </div>
+            <div class="life-zone-container zone" id="p-life-zone"><span class="zone-title">LIFE ZONE</span></div>
+          </div>
+          <div class="zone nexus-zone" id="p-nexus-zone"><span class="zone-title">NEXUS ZONE</span></div>
+          <div class="zone lord-zone" id="p-lord-zone"><span class="zone-title">LORD</span></div>
+          <div style="display:flex; gap:5px;">
+            <div class="zone deck-zone graveyard-stack" id="p-graveyard" onclick="openGraveyardModal()">
+              <span class="zone-title">GRAVEYARD</span>
+              <span class="graveyard-count" id="gy-count">0</span>
+            </div>
+            <div class="zone deck-zone" id="p-main-deck" onclick="drawMainCard()">
+              <span class="zone-title">MAIN DECK</span>
+              <div class="deck-visual" id="p-deck-visual">
+                <span class="deck-count-badge" id="p-deck-count">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="hand-area" id="player-hand"></div>
+
+  <!-- Context Menu เมนูแก้ไข -->
+  <div id="context-menu">
+    <div onclick="toggleCardOrientation()">🔄 จับตั้ง / จับนอน (Exhaust)</div>
+    <div onclick="revealCard()">👁️ หงายหน้า / คว่ำหน้าการ์ด</div>
+    <div onclick="moveSelectedCardTo('p-battlefield')">⚔️ ย้ายไป Battlefield</div>
+    <div onclick="moveSelectedCardTo('p-nexus-zone')">🌀 ย้ายไป Nexus Zone</div>
+    <div onclick="moveSelectedCardTo('p-energy-zone')">⚡ ย้ายไป Energy Zone</div>
+    <div onclick="moveSelectedCardTo('p-life-zone')">❤️ ย้ายไป Life Zone</div>
+    <div onclick="moveSelectedCardTo('hand')">🖐️ เอาขึ้นมือ</div>
+    <div onclick="moveSelectedCardTo('graveyard')">💀 ทิ้งลงสุสาน</div>
+  </div>
+
+  <!-- Modal ดูการ์ดในสุสาน -->
+  <div id="gy-modal" onclick="closeGraveyardModal()">
+    <div class="gy-box" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="color:var(--accent); font-size:16px;">💀 สุสาน (Graveyard)</h3>
+        <button class="btn btn-secondary" style="width:70px; margin:0; padding:6px;" onclick="closeGraveyardModal()">ปิด</button>
+      </div>
+      <div class="gy-cards" id="gy-modal-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const IMAGE_BASE_URL = "https://raw.githubusercontent.com/owlwhite1m-code/Card-game-Nexus-War-/main/images/";
+
+    const cardDatabase = [
+      { id: "C001", name: "The Grand Overseer-Alaric", type: "LORD", img: "alaric.jpg" },
+      { id: "C002", name: "Bunny Bastet Agis", type: "Elite", img: "bastet.jpg" },
+      { id: "C003", name: "The Bone of us", type: "Action", img: "bone_of_us.jpg" },
+      { id: "C004", name: "เร่ง การก่อสร้าง", type: "Action", img: "build_fast.jpg" },
+      { id: "C005", name: "พลก่อสร้าง ตุ้ดตุ่น", type: "Army", img: "builder.jpg" },
+      { id: "C006", name: "เพโอเทอส นักโทษนิรันด์", type: "Elite", img: "peotheus.jpg" },
+      { id: "C007", name: "ปืนใหญ่ บริษัท HellOwlfont จำกัด", type: "Nexus", img: "cannon.jpg" },
+      { id: "C008", name: "รวมพลัง ปูพรมทำลายล้าง", type: "Action", img: "carpet_bomb.jpg" },
+      { id: "C009", name: "ไซบอกซ์ แนวปะทะ Forca", type: "Army", img: "cyborg.jpg" },
+      { id: "C010", name: "อิศวินทมิฬ กลุ่มอีกาเลือด", type: "Army", img: "darkknight.jpg" },
+      { id: "C011", name: "นายช่าง ดราโกคิก", type: "Army", img: "dragokick.jpg" },
+      { id: "C012", name: "จงสู้ เราคือ HellOwlFont !!!", type: "Action", img: "fight_helloowl.jpg" },
+      { id: "C013", name: "กระบวนท่าสุดท้าย ปลิดชีพ อาลัยวรณ์", type: "Life", img: "life ปลิดชีฟ.jpg" },
+      { id: "C014", name: "ใหมองแร่พลังงานO.w.I", type: "Nexus", img: "mine.jpg" },
+      { id: "C015", name: "กับดัก ทุ่นระเบิด O.w.I B-02", type: "Nexus", img: "mine_trap.jpg" },
+      { id: "C016", name: "หุ่นยนต์ประจันบาน OwlGP-48", type: "Nexus", img: "owl_gp.jpg" },
+      { id: "C017", name: "OwlGuard", type: "Army", img: "owlguard.jpg" },
+      { id: "C018", name: "O.w.I Ranger", type: "Army", img: "ranger.jpg" },
+      { id: "C019", name: "ทีมเก็บกู้ซาก O.w.l", type: "Life", img: "ทีม กู้ซาก owl.jpg" },
+      { id: "C020", name: "Healing potion", type: "Life", img: "ยาดื่ม.jpg" },
+      { id: "C021", name: "หลุมดัก คนโง่", type: "Life", img: "หลุมดักคน.jpg" },
+      { id: "C022", name: "เจตจำนงแยก ของ Alaric", type: "Life", img: "เจต ตํานงแยกของ Alaric.jpg" },
+      { id: "C023", name: "Shield up", type: "Life", img: "ให้โล่.jpg" },
+      { id: "C024", name: "Draco phinus", type: "Life", img: "Draco phinus.jpg" },
+      { id: "C025", name: "Harvest soul", type: "Life", img: "Havest soul.jpg" },
+      { id: "C026", name: "Spore Egg", type: "Nexus", img: "Spore Egg.jpg" },
+      { id: "C027", name: "Call of the plague", type: "Action", img: "call of ม่วง.jpg" },
+      { id: "C028", name: "Gate of the void", type: "Nexus", img: "gete way.jpg" },
+      { id: "C029", name: "Hadesmocus -Plague bringer-", type: "LORD", img: "lord ม่วง.jpg" },
+      { id: "C030", name: "The end is near", type: "Life", img: "the end is near.jpg" },
+      { id: "C031", name: "Infected flower", type: "Army", img: "ดอก ติดเชื้อม่วง.jpg" },
+      { id: "C032", name: "Abomination", type: "Army", img: "ตัวยํา ม่วง.jpg" },
+      { id: "C033", name: "Rise of the plague", type: "Action", img: "ทหารโทเคน ม่วง.jpg" },
+      { id: "C034", name: "The infected", type: "Army", img: "ผู้ติดเชี้ย ม่วง.jpg" },
+      { id: "C035", name: "Infected tank", type: "Army", img: "รถถัง ม่สง.jpg" },
+      { id: "C036", name: "Floating Spore", type: "Army", img: "รังไข่บิน ม่วง.jpg" },
+      { id: "C037", name: "Lurker", type: "Army", img: "ลุกเกอร์ พืช ม่วง.jpg" },
+      { id: "C038", name: "Worm", type: "Army", img: "หนอน ม่วง.jpg" },
+      { id: "C039", name: "Camila -Queen of the plague-", type: "Elite", img: "อีลิทม่วง แมงมุม.jpg" },
+      { id: "C040", name: "Tactical change", type: "Action", img: "เปลี่ยนแผน.jpg" },
+      { id: "C041", name: "Vultura -chaos knight-", type: "Elite", img: "โกเลม ม่วง.jpg" }
+    ];
+
+    let peer = null, conn = null, createdRoomId = "";
+    let selectedCardElement = null;
+    let isEditMode = false;
+
+    let gameState = {
+      pMainDeck: [],
+      pLifeDeck: [],
+      pHand: [],
+      pGraveyard: []
+    };
+
+    function getCardData(id) {
+      return cardDatabase.find(c => c.id === id) || { id, img: "build_fast.jpg" };
+    }
+
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      const btn = document.getElementById("toggle-edit-btn");
+      const board = document.getElementById("board");
+
+      if(isEditMode) {
+        btn.classList.add("active");
+        btn.textContent = "❌ ปิดโหมดจัดการ (ปกติ)";
+        board.classList.add("flat-mode");
+        document.body.classList.add("edit-active");
+      } else {
+        btn.classList.remove("active");
+        btn.textContent = "🛠️ เปิดโหมดจัดการการ์ด";
+        board.classList.remove("flat-mode");
+        document.body.classList.remove("edit-active");
+      }
+    }
+
+    document.getElementById("create-room-btn").onclick = () => {
+      const code = document.getElementById("deck-code-input").value.trim();
+      if(!code) return alert("โปรดใส่ Deck Code ก่อนสร้างห้อง!");
+      initDeckData(code);
+      peer = new Peer();
+      peer.on('open', id => {
+        createdRoomId = id;
+        document.getElementById("room-code-display").style.display = "block";
+        document.getElementById("lobby-status").textContent = `รหัสห้อง: ${id}`;
+      });
+      peer.on('connection', c => { conn = c; setupConnection(); });
+    };
+
+    document.getElementById("copy-code-btn").onclick = () => {
+      if(!createdRoomId) return;
+      navigator.clipboard.writeText(createdRoomId).then(() => alert("คัดลอก Code ห้องแล้ว!"));
+    };
+
+    document.getElementById("join-room-btn").onclick = () => {
+      const deckCode = document.getElementById("deck-code-input").value.trim();
+      const roomCode = document.getElementById("room-code-input").value.trim();
+      if(!deckCode || !roomCode) return alert("โปรดใส่ทั้ง Deck Code และ รหัสห้อง!");
+      initDeckData(deckCode);
+      peer = new Peer();
+      peer.on('open', () => { conn = peer.connect(roomCode); setupConnection(); });
+    };
+
+    function setupConnection() {
+      conn.on('open', () => {
+        document.getElementById("lobby").style.display = "none";
+        setupInitialBoard();
+      });
+      conn.on('data', data => {
+        if(data.type === 'SYNC_HAND') renderOpponentHand(data.count);
+        if(data.type === 'SYNC_BOARD') renderOpponentBoard(data.boardState);
+      });
+    }
+
+    function initDeckData(code) {
+      try {
+        const jsonString = decodeURIComponent(atob(code));
+        const deckData = JSON.parse(jsonString);
+        gameState.pMainDeck = Object.entries(deckData.main || {}).flatMap(([id, count]) => Array(count).fill(id));
+        gameState.pLifeDeck = Object.entries(deckData.life || {}).flatMap(([id, count]) => Array(count).fill(id));
+      } catch(e) { alert("Deck Code ไม่ถูกต้อง!"); }
+    }
+
+    function setupInitialBoard() {
+      const lordIndex = gameState.pMainDeck.findIndex(id => getCardData(id).type?.toUpperCase() === "LORD");
+      if(lordIndex !== -1) {
+        const lordId = gameState.pMainDeck.splice(lordIndex, 1)[0];
+        createCardElement(lordId, "p-lord-zone");
+      }
+      gameState.pMainDeck.sort(() => Math.random() - 0.5);
+      gameState.pLifeDeck.sort(() => Math.random() - 0.5);
+
+      for(let i = 0; i < 7; i++) {
+        if(gameState.pLifeDeck.length > 0) {
+          const cardId = gameState.pLifeDeck.pop();
+          createCardElement(cardId, "p-life-zone", true);
+        }
+      }
+      updateMainDeckUI();
+      syncBoardToOpponent();
+      syncHandToOpponent();
+    }
+
+    function createCardElement(id, zoneId, isFaceDown = false, isEnergy = false) {
+      const zone = document.getElementById(zoneId);
+      const el = document.createElement("div");
+
+      if(isEnergy) {
+        el.className = "card energy-card";
+        el.textContent = "ENERGY";
+      } else {
+        el.className = `card ${isFaceDown ? 'card-back' : ''}`;
+        const cardData = getCardData(id);
+        if(!isFaceDown) el.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+      }
+
+      el.dataset.id = id;
+
+      // Event รองรับทั้ง Click และ Touch สำหรับมือถือ
+      const handleAction = (e) => {
+        e.stopPropagation();
+        selectedCardElement = el;
+
+        if(isEditMode) {
+          openContextMenu(e);
+        } else {
+          if(el.classList.contains('card-back')) {
+            const cardData = getCardData(id);
+            el.classList.remove('card-back');
+            el.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+          } else {
+            el.classList.toggle("exhausted");
+          }
+          syncBoardToOpponent();
+        }
+      };
+
+      el.addEventListener('click', handleAction);
+
+      zone.appendChild(el);
+      syncBoardToOpponent();
+    }
+
+    function playCardFromHand(id, handIndex) {
+      const zoneChoice = prompt("เลือกลงการ์ด:\n1 = Battlefield\n2 = Nexus Zone\n3 = Energy Zone", "1");
+      let zoneId = "p-battlefield";
+      if(zoneChoice === "2") zoneId = "p-nexus-zone";
+      if(zoneChoice === "3") zoneId = "p-energy-zone";
+
+      gameState.pHand.splice(handIndex, 1);
+      createCardElement(id, zoneId);
+      renderHand();
+    }
+
+    function renderHand() {
+      const container = document.getElementById("player-hand");
+      container.innerHTML = "";
+      gameState.pHand.forEach((id, index) => {
+        const cardData = getCardData(id);
+        const el = document.createElement("div");
+        el.className = "card";
+        el.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+        el.onclick = () => playCardFromHand(id, index);
+        container.appendChild(el);
+      });
+      syncHandToOpponent();
+    }
+
+    function openContextMenu(e) {
+      const menu = document.getElementById("context-menu");
+      menu.style.display = "block";
+      
+      let clientX = e.clientX || (e.touches && e.touches[0].clientX) || 100;
+      let clientY = e.clientY || (e.touches && e.touches[0].clientY) || 100;
+
+      if (clientX + 170 > window.innerWidth) clientX = window.innerWidth - 180;
+      if (clientY + 250 > window.innerHeight) clientY = window.innerHeight - 260;
+
+      menu.style.left = clientX + "px";
+      menu.style.top = clientY + "px";
+    }
+
+    document.addEventListener('click', () => {
+      document.getElementById("context-menu").style.display = "none";
+    });
+
+    function toggleCardOrientation() {
+      if(selectedCardElement) {
+        selectedCardElement.classList.toggle("exhausted");
+        syncBoardToOpponent();
+      }
+    }
+
+    function revealCard() {
+      if(selectedCardElement) {
+        const cardId = selectedCardElement.dataset.id;
+        if(selectedCardElement.classList.contains("card-back")) {
+          const cardData = getCardData(cardId);
+          selectedCardElement.classList.remove("card-back");
+          selectedCardElement.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+        } else {
+          selectedCardElement.classList.add("card-back");
+          selectedCardElement.style.backgroundImage = "";
+        }
+        syncBoardToOpponent();
+      }
+    }
+
+    function moveSelectedCardTo(targetZoneId) {
+      if(!selectedCardElement) return;
+      const cardId = selectedCardElement.dataset.id;
+      const isEnergy = selectedCardElement.classList.contains("energy-card");
+
+      selectedCardElement.remove();
+
+      if(targetZoneId === 'hand') {
+        if(!isEnergy) {
+          gameState.pHand.push(cardId);
+          renderHand();
+        }
+      } else if(targetZoneId === 'graveyard') {
+        if(!isEnergy) {
+          gameState.pGraveyard.push(cardId);
+          updateGraveyardUI();
+        }
+      } else {
+        createCardElement(cardId, targetZoneId, false, isEnergy);
+      }
+
+      selectedCardElement = null;
+      syncBoardToOpponent();
+    }
+
+    function addEnergyCard(e) {
+      if(e && e.target.classList.contains('card')) return;
+      const energyZone = document.getElementById("p-energy-zone");
+      if(energyZone.querySelectorAll('.card').length >= 10) return alert("Energy เต็มแล้ว!");
+      createCardElement("ENERGY_TOKEN", "p-energy-zone", false, true);
+    }
+
+    function updateMainDeckUI() {
+      const count = gameState.pMainDeck.length;
+      document.getElementById("p-deck-count").textContent = count;
+      const visual = document.getElementById("p-deck-visual");
+      visual.style.display = count === 0 ? "none" : "block";
+    }
+
+    function drawMainCard() {
+      if(gameState.pMainDeck.length === 0) return alert("Main Deck หมดแล้ว!");
+      const drawnCard = gameState.pMainDeck.pop();
+      gameState.pHand.push(drawnCard);
+      updateMainDeckUI();
+      renderHand();
+      syncBoardToOpponent();
+    }
+
+    function drawLifeCard() {
+      if(gameState.pLifeDeck.length === 0) return alert("Life Deck หมดแล้ว!");
+      const cardId = gameState.pLifeDeck.pop();
+      createCardElement(cardId, "p-life-zone", true);
+    }
+
+    function shuffleLifeDeck() {
+      gameState.pLifeDeck.sort(() => Math.random() - 0.5);
+      alert("สับกอง Life Deck แล้ว!");
+    }
+
+    function addLifeCount(amount) {
+      if(amount > 0) {
+        if(gameState.pLifeDeck.length > 0) drawLifeCard();
+      } else {
+        const lifeZone = document.getElementById("p-life-zone");
+        if(lifeZone.lastChild && lifeZone.lastChild.classList.contains("card")) {
+          lifeZone.lastChild.remove();
+          syncBoardToOpponent();
+        }
+      }
+    }
+
+    function updateGraveyardUI() {
+      const gyZone = document.getElementById("p-graveyard");
+      document.getElementById("gy-count").textContent = gameState.pGraveyard.length;
+      gyZone.querySelectorAll('.card').forEach(c => c.remove());
+      if(gameState.pGraveyard.length > 0) {
+        const topId = gameState.pGraveyard[gameState.pGraveyard.length - 1];
+        const cardData = getCardData(topId);
+        const topCard = document.createElement("div");
+        topCard.className = "card";
+        topCard.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+        gyZone.appendChild(topCard);
+      }
+    }
+
+    // ระบบเลือกการ์ดจากสุสานกลับขึ้นมือ / ขึ้นบนเด็ค / ลงใต้เด็ค
+    function openGraveyardModal() {
+      const modal = document.getElementById("gy-modal");
+      const list = document.getElementById("gy-modal-list");
+      list.innerHTML = "";
+
+      gameState.pGraveyard.forEach((id, index) => {
+        const cardData = getCardData(id);
+        
+        const wrapper = document.createElement("div");
+        wrapper.className = "gy-card-wrapper";
+
+        const el = document.createElement("div");
+        el.className = "card";
+        el.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+
+        const actionBox = document.createElement("div");
+        actionBox.className = "gy-card-actions";
+
+        const btnHand = document.createElement("button");
+        btnHand.className = "btn-gy-action";
+        btnHand.textContent = "🖐️ ขึ้นมือ";
+        btnHand.onclick = () => moveFromGraveyard(index, 'hand');
+
+        const btnTopDeck = document.createElement("button");
+        btnTopDeck.className = "btn-gy-action";
+        btnTopDeck.textContent = "⬆️ บนสุดเด็ค";
+        btnTopDeck.onclick = () => moveFromGraveyard(index, 'topDeck');
+
+        const btnBottomDeck = document.createElement("button");
+        btnBottomDeck.className = "btn-gy-action";
+        btnBottomDeck.textContent = "⬇️ ใต้สุดเด็ค";
+        btnBottomDeck.onclick = () => moveFromGraveyard(index, 'bottomDeck');
+
+        actionBox.appendChild(btnHand);
+        actionBox.appendChild(btnTopDeck);
+        actionBox.appendChild(btnBottomDeck);
+
+        wrapper.appendChild(el);
+        wrapper.appendChild(actionBox);
+        list.appendChild(wrapper);
+      });
+      modal.style.display = "flex";
+    }
+
+    function moveFromGraveyard(index, destination) {
+      const cardId = gameState.pGraveyard.splice(index, 1)[0];
+
+      if(destination === 'hand') {
+        gameState.pHand.push(cardId);
+        renderHand();
+      } else if(destination === 'topDeck') {
+        gameState.pMainDeck.push(cardId); // ไว้บนสุด (อิงจาก pop)
+        updateMainDeckUI();
+      } else if(destination === 'bottomDeck') {
+        gameState.pMainDeck.unshift(cardId); // ไว้ใต้สุด
+        updateMainDeckUI();
+      }
+
+      updateGraveyardUI();
+      openGraveyardModal(); // รีเฟรช Modal
+      syncBoardToOpponent();
+    }
+
+    function closeGraveyardModal() {
+      document.getElementById("gy-modal").style.display = "none";
+    }
+
+    function syncHandToOpponent() {
+      if(conn) conn.send({ type: 'SYNC_HAND', count: gameState.pHand.length });
+    }
+
+    function renderOpponentHand(count) {
+      const container = document.getElementById("opponent-hand");
+      container.innerHTML = "";
+      for(let i = 0; i < count; i++) {
+        const el = document.createElement("div");
+        el.className = "card card-back";
+        container.appendChild(el);
+      }
+    }
+
+    function syncBoardToOpponent() {
+      if(!conn) return;
+      const zones = ['p-battlefield', 'p-life-zone', 'p-nexus-zone', 'p-lord-zone', 'p-energy-zone'];
+      const boardState = {};
+
+      zones.forEach(zId => {
+        const zoneEl = document.getElementById(zId);
+        boardState[zId] = Array.from(zoneEl.querySelectorAll('.card')).map(card => ({
+          id: card.dataset.id || 'C001',
+          isFaceDown: card.classList.contains('card-back'),
+          isExhausted: card.classList.contains('exhausted'),
+          isEnergy: card.classList.contains('energy-card')
+        }));
+      });
+
+      boardState['p-graveyard'] = gameState.pGraveyard;
+      boardState['mainDeckCount'] = gameState.pMainDeck.length;
+
+      conn.send({ type: 'SYNC_BOARD', boardState });
+    }
+
+    function renderOpponentBoard(boardState) {
+      const mapZones = {
+        'p-battlefield': 'opp-battlefield',
+        'p-life-zone': 'opp-life-zone',
+        'p-nexus-zone': 'opp-nexus-zone',
+        'p-lord-zone': 'opp-lord-zone',
+        'p-energy-zone': 'opp-energy-zone'
+      };
+
+      if(boardState['mainDeckCount'] !== undefined) {
+        document.getElementById("opp-deck-count").textContent = boardState['mainDeckCount'];
+      }
+
+      Object.entries(boardState).forEach(([pZone, cards]) => {
+        if(pZone === 'p-graveyard' || pZone === 'mainDeckCount') return;
+
+        const oppZoneId = mapZones[pZone];
+        const zoneEl = document.getElementById(oppZoneId);
+        if(!zoneEl) return;
+        zoneEl.innerHTML = `<span class="zone-title">${oppZoneId.replace('opp-', '').toUpperCase()}</span>`;
+
+        cards.forEach(c => {
+          const el = document.createElement('div');
+          if(c.isEnergy) {
+            el.className = "card energy-card";
+            el.textContent = "ENERGY";
+          } else {
+            el.className = `card ${c.isFaceDown ? 'card-back' : ''}`;
+            const cardData = getCardData(c.id);
+            if(!c.isFaceDown) el.style.backgroundImage = `url('${IMAGE_BASE_URL}${cardData.img}')`;
+          }
+          if(c.isExhausted) el.classList.add('exhausted');
+          zoneEl.appendChild(el);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
